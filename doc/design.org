@@ -1,0 +1,126 @@
+* Specs for Commands, Domain Events
+
+** Problem
+
+In our CQRS/ES-based new architectural approach, much of the knowledge
+about the business domain and business processes that the system is
+implementing are encoded in terms of Commands and Domain Events. In
+order to both understand the system and to provide tools to help build
+and monitor it, we need to have ways to describe and catalog Commands
+and Domain Events, and programmatically access that information.
+
+For instance, when building our REST Gateway (Roshomon), we need to be
+able to locate all the relevant types of Commands for a given domain
+so that we can programatically build endpoints that will accept and
+validate those commands. When building Event and Command Handlers,
+developers need to be able to know and describe their inputs and
+outputs, and have confidence that the data they're dealing with will
+be valid.
+
+Commands are the inputs to the system - interactions between the
+outside world and our system's understanding of it. Domain Events
+describe facts about the world through the lens of our business.
+
+** Proposed Solution
+
+Use Clojure specs to describe Commands and Domain Events.
+
+Build a library that provides basic elements and a common structure
+for Commands and Domain Events, and ways to describe them.
+
+The main entry points are macros - ~defevent~ for events and
+~defcommand~ and ~defsimple~ for commands.
+
+*** defevent
+
+Events are versioned, allowing for controlled progression of our
+understanding of events as the system evolves.
+
+Events have a common top-level structure, with a provenance and a
+payload. The provenance describes where the event came from, who
+generated it, when it was generated, and how long it took to process.
+The payload has an event type key and all the other event-specific
+data.
+
+The `defevent` macro takes a symbol name, an optional docstring, a
+namespaced keyword specifiying the type of the event, and one or more
+versions.
+
+Each version has a number, a spec for its payload, and for every
+version beyond the first functions to cast both up and down from the
+previous version.
+
+*** defcommand
+
+Much like ~defevent~, ~defcommand~ defines a command.
+
+Commands also have a common top-level structure. Their payload
+contains a type key, which is used to determine the spec for the
+specific command type.
+
+They also register a spec and one or more versions of the command.
+Casting functions must also be supplied for every version after the first.
+
+*** defsimple
+
+A special case of commands, ~defsimple~ handles two situations.
+
+1. Commands that originate from external systems, where we don't
+   control the data format and therefore cannot impose our standard
+   command structure. For instance, webhook-type commands.
+2. Commands that do not require any business logic to process, outside
+   of spec conformance.
+
+For these simple commands, all the processing is done in the web
+layer. The ~defsimple~ macro includes a handler function that takes
+the input command and returns a collection of event payloads generated
+from it.
+
+*** Registry
+
+Irulan has its own registry which stores the events and commands
+created via the def- macros. It allows for lookup of specs, valid
+versions and casting functions, and a certain level of introspection.
+
+It broadly follows the principles of Clojure's spec registry, which
+uses a global atom to store the registered specs.
+
+** Alternative Solutions
+
+Convention or explicit definition is one major question for how to do spec registry/discovery. This approach goes with explicit definition.
+
+An original idea was to tie the specs of commands and events to a
+specific Clojure namespace convention, so that the specs for X could
+be found by going to such-and-such X namespace and looking for a
+specifically named keyword.
+
+Also it could be said that this approach is a little bit macro-heavy
+and the discovery features/registry is unnecessary.
+
+** Future Work
+
+There are a few unanswered questions:
+
+In the case of simple commands, where does the provenance of the
+generated events come from? It can't be generated statically, as it
+relies on information about the system that's processing the command.
+
+Does the distinction between ~defcommand~ and ~defsimple~ make sense?
+It's been pointed out that there's actually a 2x2 matrix of
+possibilities for commands. One axis is whether the command uses the
+standard format for commands, or whether it's a custom format. The
+other axis is whether the command needs stateful processing.
+
+The current design collapses the idea of stateless processing with
+non-standard specs, and doesn't contemplate stateless commands that
+follow our command format, nor non-conforming commands that need
+stateful processing.
+
+There's an open question about how registration will work in the full
+picture, because each namespace with business specs will have to be
+compiled for registration to take place.
+
+The idea of putting docs on command and event specs is somewhat
+loosely incorporated into the current design. However, it may be
+desirable to allow docs on arbitrary specs, and have a registry for
+those. Irulan is probably not the right place for this.

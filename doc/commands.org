@@ -1,0 +1,20 @@
+#+TITLE: Command definition and registry
+
+* Problem
+  In our CQRS system we need a way to define and describe the inputs to the system - commands.
+
+  There is a 2x2 matrix of possibilities for commands
+
+  |          | Stateless | Stateful |
+  |----------+-----------+----------|
+  | External |           |          |
+  | Internal |           |          |
+
+  The significant implication of stateful processing is those commands may be rejected based on the
+  current state of system, and should be written to a failure topic with some description of the
+  reason for their failure.  Stateless commands can fail *validation*, but never end up in a topic
+  since their structure is invalid.
+
+  External commands are ones which originate outside of our systems, so their structure is
+  not controllable.  This means no versioning.  Internal commands can be versioned, have up and down
+  casters, and include a provenance.
